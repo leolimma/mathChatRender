@@ -1,0 +1,13 @@
+{
+  "name": "mathchatrender",
+  "version": "1.2.1",
+  "private": true,
+  "description": "Build tools for Math Chat Render handler",
+  "scripts": {
+    "build": "esbuild src/mwai-mathjax-handler.mjs --bundle --outfile=js/mwai-mathjax-handler.js --platform=browser --format=esm --minify",
+    "watch": "esbuild src/mwai-mathjax-handler.mjs --bundle --outfile=js/mwai-mathjax-handler.js --platform=browser --format=esm --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11"
+  }
+}
