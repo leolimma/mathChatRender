@@ -1,4 +1,5 @@
 // Modern ES module entry for Math Chat Render handler
+/* global MathJax */
 // Uses top-level await to wait for MathJax startup before attaching observers.
 
 // Utilities moved to top-level
@@ -111,20 +112,24 @@ function forceScrollToBottom(element) {
   });
 }
 
-async function renderLastMessageAndScroll(chatBody, messageObserverRef) {
-  const lastReply = chatBody.querySelector('.mwai-reply:last-child');
-  if (!lastReply) return;
+async function renderLastMessageAndScroll(container, messageObserverRef) {
+  if (!container) return;
 
+  const chatBody = container.closest('.mwai-body') || document.querySelector('.mwai-chat .mwai-body');
+
+  // PAUSA o observador para evitar loops
   safeDisconnect(messageObserverRef.current);
 
   try {
+    const lastReply = container.querySelector('.mwai-reply:last-child');
+    if (!lastReply) return;
     await globalThis.MathJax.typesetPromise([lastReply]);
     forceScrollToBottom(chatBody);
   } catch (err) {
     console.error('MathChatRender: Erro ao renderizar MathJax:', err);
   } finally {
     if (messageObserverRef.current) {
-      messageObserverRef.current.observe(chatBody, {
+      messageObserverRef.current.observe(container, {
         childList: true,
         subtree: true,
         characterData: true
@@ -141,10 +146,9 @@ function attachMessageObserver(conversationElement) {
 
   const messageObserverRef = { current: null };
   messageObserverRef.current = new MutationObserver((mutationsList) => {
-    const shouldRun = mutationsList.some(mutationContainsMath);
-    if (shouldRun) {
-      debounce(() => renderLastMessageAndScroll(chatBody, messageObserverRef), 250);
-    }
+    // Chamamos sem filtro: qualquer mutação pode ser parte de um stream —
+    // usamos debounce para agrupar atualizações rápidas.
+    debounce(() => renderLastMessageAndScroll(conversationElement, messageObserverRef), 250);
   });
 
   // Stop observing while processing history
@@ -164,48 +168,54 @@ function attachMessageObserver(conversationElement) {
   globalThis.addEventListener('pagehide', () => safeDisconnect(messageObserverRef.current));
 }
 
-// Main (top-level await)
-await waitForMathJaxStartup();
-if (!globalThis.MathJax?.startup?.promise) {
-  console.error('MathChatRender: MathJax startup não encontrado no tempo limite.');
-} else {
-  await globalThis.MathJax.startup.promise;
-  console.log('MathChatRender: MathJax v4 iniciado. A executar o observador do chat.');
-
-  function init() {
-    const chatRootContainer = document.querySelector('.mwai-chatbot-container');
-    if (!chatRootContainer) {
-      console.error('MathChatRender: Container RAIZ (.mwai-chatbot-container) não encontrado.');
+// Main: usar async IIFE para compatibilidade com scripts carregados sem type=module
+(async function main() {
+  try {
+    await waitForMathJaxStartup();
+    if (!globalThis.MathJax?.startup?.promise) {
+      console.error('MathChatRender: MathJax startup não encontrado no tempo limite.');
       return;
     }
+    await globalThis.MathJax.startup.promise;
+    console.log('MathChatRender: MathJax v4 iniciado. A executar o observador do chat.');
 
-    const conversationElement = chatRootContainer.querySelector('.mwai-conversation');
-    if (conversationElement) {
-      attachMessageObserver(conversationElement);
-      return;
-    }
+    const init = () => {
+      const chatRootContainer = document.querySelector('.mwai-chatbot-container');
+      if (!chatRootContainer) {
+        console.error('MathChatRender: Container RAIZ (.mwai-chatbot-container) não encontrado.');
+        return;
+      }
 
-    console.log('MathChatRender: .mwai-conversation não encontrado. Aguardando ser adicionado ao DOM...');
-    const masterObserver = new MutationObserver((mutationsList, observer) => {
-      for (const mutation of mutationsList) {
-        if (mutation.addedNodes?.length) {
-          const foundTarget = findConversationElement(mutation.addedNodes);
-          if (foundTarget) {
-            attachMessageObserver(foundTarget);
-            safeDisconnect(observer);
-            return;
+      const conversationElement = chatRootContainer.querySelector('.mwai-conversation');
+      if (conversationElement) {
+        attachMessageObserver(conversationElement);
+        return;
+      }
+
+      console.log('MathChatRender: .mwai-conversation não encontrado. Aguardando ser adicionado ao DOM...');
+      const masterObserver = new MutationObserver((mutationsList, observer) => {
+        for (const mutation of mutationsList) {
+          if (mutation.addedNodes?.length) {
+            const foundTarget = findConversationElement(mutation.addedNodes);
+            if (foundTarget) {
+              attachMessageObserver(foundTarget);
+              safeDisconnect(observer);
+              return;
+            }
           }
         }
-      }
-    });
+      });
 
-    masterObserver.observe(chatRootContainer, { childList: true, subtree: true });
-    globalThis.addEventListener('pagehide', () => safeDisconnect(masterObserver));
-  }
+      masterObserver.observe(chatRootContainer, { childList: true, subtree: true });
+      globalThis.addEventListener('pagehide', () => safeDisconnect(masterObserver));
+    };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  } catch (err) {
+    console.error('MathChatRender: Falha ao inicializar o handler do MathJax', err);
   }
-}
+})();

@@ -5,9 +5,13 @@
   "description": "Build tools for Math Chat Render handler",
   "scripts": {
     "build": "esbuild src/mwai-mathjax-handler.mjs --bundle --outfile=js/mwai-mathjax-handler.js --platform=browser --format=esm --minify",
-    "watch": "esbuild src/mwai-mathjax-handler.mjs --bundle --outfile=js/mwai-mathjax-handler.js --platform=browser --format=esm --watch"
+    "watch": "esbuild src/mwai-mathjax-handler.mjs --bundle --outfile=js/mwai-mathjax-handler.js --platform=browser --format=esm --watch",
+    "lint": "eslint --ext .js,.mjs src js",
+    "format": "prettier --write \"src/**/*.mjs\" \"js/**/*.js\""
   },
   "devDependencies": {
-    "esbuild": "^0.25.11"
+    "esbuild": "^0.25.11",
+    "eslint": "^8.50.0",
+    "prettier": "^2.8.8"
   }
 }
